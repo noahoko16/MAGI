@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MAGI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&family=Oswald:wght@500;700&family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+/* Layout: command console. Query bar, the three-unit board with the resolution core, the resolution report, then each unit's dossier. Single dark world by design. */
+:root {
+  --bg: #07080a;
+  --panel: #0e1014;
+  --panel-2: #14171d;
+  --line: #e8762c;          /* NERV orange */
+  --line-dim: #6b3a18;
+  --fg: #f1e3cf;
+  --muted: #a8927a;
+  --cyan: #3fd0e8;          /* agreement / done */
+  --red: #ff3b3b;           /* disagreement / error */
+  --amber: #f5c542;         /* working / partial */
+  --grey: #6f6f78;
+  --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+  --kanji: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --read: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.55 var(--mono);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 56px;
+  background-image:
+    linear-gradient(rgba(232,118,44,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232,118,44,.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+a { color: var(--line); }
+
+/* header */
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; border-bottom: 2px solid var(--line); padding-bottom: 10px; }
+h1 { font: 700 clamp(34px, 7vw, 56px)/1 var(--display); letter-spacing: .08em; margin: 0; color: var(--line); }
+h1 small { font: 600 12px/1.3 var(--mono); letter-spacing: .2em; color: var(--muted); display: block; margin-top: 6px; }
+.head-right { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.status { font-size: 12px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.status b { color: var(--line); }
+
+/* controls */
+.lbl { font: 600 12px/1.2 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--line); }
+textarea, input[type=text], input[type=password], select {
+  width: 100%; background: var(--panel); color: var(--fg); border: 1px solid var(--line-dim);
+  font: 15px/1.5 var(--mono); padding: 11px 12px; border-radius: 0;
+}
+textarea { min-height: 90px; resize: vertical; }
+textarea:focus, input:focus, select:focus, button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--line); width: 16px; height: 16px; }
+.inline-select { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.inline-select select { width: auto; padding: 6px 8px; font-size: 13px; }
+.btn, button {
+  font: 700 15px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; text-decoration: none;
+  background: var(--line); color: #120800; border: 0; padding: 13px 20px; cursor: pointer; display: inline-block;
+}
+.btn.big { clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); padding: 15px 26px; font-size: 17px; }
+.btn.ghost, button.ghost { background: transparent; color: var(--line); box-shadow: inset 0 0 0 1px var(--line-dim); }
+.btn.small, button.small { font-size: 13px; padding: 10px 12px; }
+.btn:disabled, button:disabled { opacity: .45; cursor: progress; }
+.msg { font-size: 13px; color: var(--amber); }
+
+.query { display: grid; gap: 10px; }
+.chip { display: flex; gap: 10px; align-items: start; border: 1px dashed var(--line); padding: 8px 10px; font-size: 13px; color: var(--fg); }
+.chip b { color: var(--line); font-weight: 600; white-space: nowrap; }
+.chip span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chip button { padding: 4px 8px; font-size: 12px; }
+
+/* MAGI board */
+.board { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.unit {
+  position: relative; min-height: 132px; padding: 14px 20px;
+  border: 3px solid var(--state, var(--line-dim));
+  background: color-mix(in srgb, var(--state, transparent) 14%, var(--panel));
+  display: grid; align-content: space-between; gap: 6px;
+  transition: background .35s, border-color .35s;
+}
+.unit.b { grid-column: 1 / -1; justify-self: center; width: min(100%, 500px); clip-path: polygon(0 0, 100% 0, 100% 68%, 78% 100%, 22% 100%, 0 68%); padding-bottom: 40px; }
+.unit.c { clip-path: polygon(0 0, 84% 0, 100% 24%, 100% 100%, 0 100%); }
+.unit.m { clip-path: polygon(16% 0, 100% 0, 100% 100%, 0 100%, 0 24%); text-align: right; }
+.unit .name { font: 700 clamp(20px, 3.6vw, 30px)/1 var(--display); letter-spacing: .1em; }
+.unit .meta { font-size: 11px; letter-spacing: .16em; color: var(--muted); text-transform: uppercase; }
+.unit .kanji { font: 900 clamp(28px, 5.5vw, 44px)/1 var(--kanji); color: var(--state, var(--muted)); letter-spacing: .08em; }
+.unit .sub { font-size: 11px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.unit[data-s=working] { --state: var(--amber); }
+.unit[data-s=working] .kanji, .unit[data-s=waiting] .kanji { animation: blink 1.1s steps(2) infinite; }
+.unit[data-s=waiting] { --state: var(--line); }
+.unit[data-s=done] { --state: var(--cyan); }
+.unit[data-s=error] { --state: var(--grey); }
+@keyframes blink { 50% { opacity: .3; } }
+
+.core { grid-column: 1 / -1; justify-self: center; text-align: center; display: grid; gap: 4px; border: 2px solid var(--line); padding: 10px 24px; background: var(--bg); min-width: 250px; }
+.core .k { font: 700 12px/1 var(--mono); letter-spacing: .3em; color: var(--muted); }
+.core .result { font: 900 clamp(28px, 5.5vw, 42px)/1.1 var(--kanji); color: var(--line); letter-spacing: .1em; }
+.core .en { font: 700 14px/1.2 var(--display); letter-spacing: .22em; color: var(--fg); }
+.core[data-a="1"] { border-color: var(--cyan); } .core[data-a="1"] .result { color: var(--cyan); }
+.core[data-a="2"] { border-color: var(--amber); } .core[data-a="2"] .result { color: var(--amber); }
+.core[data-a="3"] { border-color: var(--red); } .core[data-a="3"] .result { color: var(--red); }
+
+/* resolution report */
+.report { border: 2px solid var(--line); background: var(--panel); }
+.report-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 16px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line-dim); background: color-mix(in srgb, var(--line) 10%, var(--panel)); }
+.report-head h2 { margin: 0; font: 700 22px/1.1 var(--display); letter-spacing: .12em; color: var(--line); }
+.report-head h2 span { font: 900 20px/1 var(--kanji); margin-right: 10px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tag { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 6px 8px; border: 1px solid currentColor; }
+.tag.ex { color: var(--amber); } .tag.by { color: var(--muted); border-color: var(--line-dim); }
+.tag.c-high { color: var(--cyan); } .tag.c-medium { color: var(--amber); } .tag.c-low { color: var(--red); }
+.meter { display: inline-flex; gap: 3px; align-items: center; font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.meter i { width: 18px; height: 10px; background: #23262d; display: block; }
+.meter[data-a="1"] i:nth-child(-n+1), .meter[data-a="1"] { --m: var(--cyan); }
+.meter[data-a="2"] { --m: var(--amber); } .meter[data-a="3"] { --m: var(--red); }
+.meter[data-a="1"] i:nth-child(1), .meter[data-a="2"] i:nth-child(-n+2), .meter[data-a="3"] i:nth-child(-n+3) { background: var(--m); }
+.meter b { margin-left: 6px; color: var(--m, var(--muted)); font-weight: 600; }
+.report-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.best { padding: 18px 22px; min-width: 0; }
+.side { padding: 18px 20px; border-left: 1px solid var(--line-dim); display: grid; gap: 18px; align-content: start; min-width: 0; }
+.side h3 { margin: 0 0 8px; font: 600 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--line); }
+.contra { border-left: 3px solid var(--amber); padding-left: 12px; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line-dim); align-items: center; }
+.empty { color: var(--muted); }
+
+/* readable answer text */
+.md { font: 15px/1.6 var(--read); overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { font-family: var(--display); letter-spacing: .04em; line-height: 1.25; margin: 1em 0 .4em; color: var(--fg); }
+.md h1 { font-size: 1.35em; } .md h2 { font-size: 1.2em; } .md h3 { font-size: 1.05em; }
+.md p, .md ul, .md ol { margin: .55em 0; } .md ul, .md ol { padding-left: 1.3em; }
+.md strong { color: #fff4e4; }
+.md code { font: .88em var(--mono); background: var(--panel-2); padding: 1px 5px; }
+.md pre { background: var(--panel-2); padding: 12px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; } .md th, .md td { border: 1px solid var(--line-dim); padding: 6px 10px; }
+.md .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; margin: .7em 0; }
+.md .katex { font-size: 1.08em; }
+.best.md { max-width: 74ch; }
+
+/* dossiers */
+.dossiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--panel); border-top: 3px solid var(--st, var(--line-dim)); padding: 14px 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card.s-done { --st: var(--cyan); } .card.s-error { --st: var(--grey); } .card.s-working { --st: var(--amber); }
+.card.s-waiting { --st: var(--line); box-shadow: inset 0 0 0 1px var(--line); }
+.card-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card-head h3 { margin: 0; font: 700 18px/1.2 var(--display); letter-spacing: .1em; min-width: 0; }
+.card-head .who { font-size: 11px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; flex-shrink: 0; }
+.card .md { max-height: 440px; overflow-y: auto; font-size: 14.5px; }
+.card details { border-top: 1px dashed var(--line-dim); padding-top: 8px; }
+.card summary { cursor: pointer; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.card details .md { margin-top: 8px; max-height: 300px; }
+.err { color: var(--red); font-size: 13.5px; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; margin: 0; }
+.paste { display: grid; gap: 9px; border: 1px dashed var(--line-dim); padding: 12px; }
+.paste .steps { margin: 0; font-size: 13px; color: var(--fg); }
+.paste .steps b { color: var(--line); }
+.paste textarea { min-height: 130px; font: 14px/1.5 var(--read); }
+
+/* settings */
+details.settings { border: 1px solid var(--line-dim); background: var(--panel); }
+details.settings > summary { cursor: pointer; padding: 14px 16px; font: 700 15px/1.2 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--line); }
+.settings-body { padding: 0 16px 16px; display: grid; gap: 14px; }
+.cfg { display: grid; grid-template-columns: 110px minmax(0, 210px) minmax(0, 1fr) minmax(0, 200px); gap: 10px; align-items: center; }
+.cfg .t { font: 700 16px/1.2 var(--display); letter-spacing: .08em; }
+.cfg .t span { display: block; font: 11px/1.3 var(--mono); color: var(--muted); letter-spacing: .1em; }
+.cfg input:disabled { opacity: .4; }
+.note { font-size: 13px; color: var(--muted); margin: 0; max-width: 80ch; }
+.note b { color: var(--fg); }
+
+/* history drawer */
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100%); z-index: 50;
+  background: var(--panel); border-left: 2px solid var(--line); overflow-y: auto;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+  display: grid; gap: 12px; align-content: start; box-shadow: -20px 0 40px rgba(0,0,0,.6);
+}
+.drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.drawer-head h2 { margin: 0; font: 700 20px/1 var(--display); letter-spacing: .14em; color: var(--line); }
+.hist-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; border: 1px solid var(--line-dim); background: var(--bg); }
+.hist-item button.open { all: unset; cursor: pointer; padding: 10px 12px; display: grid; gap: 4px; }
+.hist-item button.open:focus-visible { outline: 2px solid var(--line); }
+.hist-item .hq { font: 14px/1.4 var(--read); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.hist-item .hm { font-size: 11px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.hist-item .del { background: transparent; color: var(--muted); padding: 10px; font-size: 16px; }
+.hist-item .del:hover { color: var(--red); }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
+
+@media (max-width: 760px) {
+  .board { grid-template-columns: 1fr 1fr; }
+  .unit { min-height: 104px; padding: 10px 12px; }
+  .unit.b { padding-bottom: 28px; }
+  .unit .meta { font-size: 10px; letter-spacing: .08em; }
+  .unit .name { font-size: 17px; letter-spacing: .06em; }
+  .report-body { grid-template-columns: 1fr; }
+  .side { border-left: 0; border-top: 1px solid var(--line-dim); }
+  .dossiers { grid-template-columns: 1fr; }
+  .cfg { grid-template-columns: 1fr; }
+  .core { min-width: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MAGI<small>SUPERCOMPUTER SYSTEM · 3-UNIT CONSENSUS</small></h1>
+    <div class="head-right">
+      <div class="status" id="status">STATUS: <b>STANDBY</b></div>
+      <button class="btn small ghost" type="button" id="histOpen">履歴 · History <span id="histCount"></span></button>
+    </div>
+  </header>
+
+  <section class="query">
+    <label class="lbl" for="q">提訴 · Query</label>
+    <div class="chip" id="followChip" hidden><b>FOLLOW-UP TO</b><span id="followText"></span><button class="ghost" type="button" id="followCancel" aria-label="Stop following up">✕</button></div>
+    <textarea id="q" placeholder="Ask anything…">How long should I let a steak rest after cooking, and should I cover it?</textarea>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="crosscheck" checked> Cross-check (AIs on an API key)</label>
+      <label class="check"><input type="checkbox" id="manualcheck"> Manual cross-check for pasted AIs (slower)</label>
+      <span class="inline-select"><label for="judge">Auto-combine with</label>
+        <select id="judge"><option value="gemini">Gemini</option><option value="claude">Claude</option><option value="gpt">ChatGPT</option></select></span>
+      <label class="check"><input type="checkbox" id="demo"> Demo mode</label>
+    </div>
+    <div class="row">
+      <button class="btn big" id="go" type="button">Submit to MAGI</button>
+      <span class="msg" id="hint" role="status"></span>
+    </div>
+  </section>
+
+  <section class="board" aria-label="Unit status">
+    <div class="unit b" id="u-gpt" data-s="idle"><div><div class="name">BALTHASAR · 2</div><div class="meta">ChatGPT</div></div><div class="kanji">待機</div><div class="sub">Standby</div></div>
+    <div class="unit c" id="u-gemini" data-s="idle"><div><div class="name">CASPER · 3</div><div class="meta">Gemini</div></div><div class="kanji">待機</div><div class="sub">Standby</div></div>
+    <div class="unit m" id="u-claude" data-s="idle"><div><div class="name">MELCHIOR · 1</div><div class="meta">Claude</div></div><div class="kanji">待機</div><div class="sub">Standby</div></div>
+    <div class="core" id="core"><div class="k">決議 · RESOLUTION</div><div class="result">―</div><div class="en">AWAITING QUERY</div></div>
+  </section>
+
+  <section class="report" id="report" aria-live="polite">
+    <div class="report-head">
+      <h2><span>決議</span>Best answer</h2>
+      <div class="badges">
+        <span class="tag ex" id="exampleTag" hidden>Example</span>
+        <span class="meter" id="meter" hidden><i></i><i></i><i></i><b></b></span>
+        <span class="tag" id="conf" hidden></span>
+        <span class="tag by" id="by" hidden></span>
+      </div>
+    </div>
+    <div class="report-body">
+      <div class="best md" id="best"><p class="empty">The combined answer appears here.</p></div>
+      <div class="side">
+        <div><h3>Contradictions found</h3><div class="md contra" id="contra"><p class="empty">None yet.</p></div></div>
+        <div><h3>Where they agree</h3><div class="md" id="agree"><p class="empty">None yet.</p></div></div>
+      </div>
+    </div>
+    <div class="report-actions" id="actions" hidden>
+      <button class="btn small" type="button" id="followBtn">Ask a follow-up</button>
+      <button class="btn small ghost" type="button" id="copyBtn">Copy answer</button>
+      <button class="btn small ghost" type="button" id="saveBtn">Save as file</button>
+      <span class="msg" id="actionMsg"></span>
+    </div>
+  </section>
+
+  <section class="dossiers" id="dossiers" aria-label="Individual answers"></section>
+
+  <details class="settings" id="settingsBox">
+    <summary>Unit configuration · keys and models</summary>
+    <div class="settings-body">
+      <p class="note"><b>Paste from free app</b> costs nothing: the page opens that AI's free app with your question filled in, and you paste its reply back. <b>API key</b> runs on its own but needs a key (Gemini's is free; Claude and ChatGPT need paid credit). If every AI is on paste, the final combining step is pasted too.</p>
+      <div class="cfg"><div class="t">MELCHIOR<span>Claude</span></div>
+        <select id="mode-claude" aria-label="How Claude answers"><option value="paste">Paste from free app</option><option value="api">API key</option></select>
+        <input type="password" id="key-claude" placeholder="Anthropic key, sk-ant-…" autocomplete="off"><input type="text" id="model-claude" value="claude-opus-5-5" aria-label="Claude model"></div>
+      <div class="cfg"><div class="t">BALTHASAR<span>ChatGPT</span></div>
+        <select id="mode-gpt" aria-label="How ChatGPT answers"><option value="paste">Paste from free app</option><option value="api">API key</option></select>
+        <input type="password" id="key-gpt" placeholder="OpenAI key, sk-…" autocomplete="off"><input type="text" id="model-gpt" value="gpt-6.1-sol" aria-label="OpenAI model"></div>
+      <div class="cfg"><div class="t">CASPER<span>Gemini</span></div>
+        <select id="mode-gemini" aria-label="How Gemini answers"><option value="paste">Paste from free app</option><option value="api">API key</option></select>
+        <input type="password" id="key-gemini" placeholder="Google AI Studio key, AIza…" autocomplete="off"><input type="text" id="model-gemini" value="gemini-3.8-flash" aria-label="Gemini model"></div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="remember"> Remember keys on this device</label>
+        <button class="btn small ghost" type="button" id="forget">Clear saved keys</button>
+      </div>
+      <p class="note">Keys and history stay in this browser. Keys are sent only to each company's own API. Model names change often; if a card shows a model error, paste the current name from that company's docs.</p>
+    </div>
+  </details>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="History">
+  <div class="drawer-head"><h2>履歴 · HISTORY</h2><button class="btn small ghost" type="button" id="histClose">Close</button></div>
+  <div id="histList"></div>
+  <div class="row"><button class="btn small ghost" type="button" id="histClear">Clear all history</button><span class="msg" id="histMsg"></span></div>
+</aside>
+
+<script>
+// ===================== config =====================
+const MODELS = [
+  { id: "claude", name: "Claude", unit: "MELCHIOR · 1" },
+  { id: "gpt", name: "ChatGPT", unit: "BALTHASAR · 2" },
+  { id: "gemini", name: "Gemini", unit: "CASPER · 3" }
+];
+const APPS = {
+  claude: { base: "https://claude.ai/new", q: "https://claude.ai/new?q=" },
+  gpt: { base: "https://chatgpt.com/", q: "https://chatgpt.com/?q=" },
+  gemini: { base: "https://gemini.google.com/app", q: "https://gemini.google.com/app?q=" }
+};
+
+const ANSWER_SYS = `You are one of three independent AI models answering the same question. Give your best, accurate, complete answer. Be specific and practical. Say plainly where you are uncertain. Use markdown, and LaTeX between $$ for equations. Stay under about 400 words unless the question truly needs more.`;
+
+const CRITIQUE_SYS = `You are reviewing answers that three AI models gave to the same question, including your own. Be direct and concise, in markdown bullet points:
+- Factual errors in any answer (name which model).
+- Contradictions between the answers, and which side is right and why.
+- Anything important all of them missed.
+- If your own answer was wrong somewhere, say so.
+Under 250 words.`;
+
+const SYNTH_SYS = `You combine answers from three AI models (Claude, ChatGPT, Gemini) into the single best possible answer. Resolve disagreements using evidence and reasoning, not majority vote. Do not mention "the models" inside the best answer itself; write it as a direct answer to the user. Use LaTeX between $$ for equations.
+Output markdown with EXACTLY these five sections, in this order, and nothing before the first one:
+## Best answer
+(the complete, corrected answer to the user's question)
+## Contradictions
+(for each disagreement: what it was, who said what, which is correct and why. If there were none, write "None found.")
+## Where they agree
+(short bullet list)
+## Agreement level
+(exactly one of: Strong agreement, Some disagreement, Major disagreement)
+## Confidence
+(one word, High, Medium or Low, then one sentence explaining why)`;
+
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+const modeOf = (id) => $("#mode-" + id).value;
+const keyOf = (id) => $("#key-" + id).value.trim();
+const nameOf = (id) => MODELS.find(m => m.id === id).name;
+
+// ===================== API calls =====================
+async function callClaude(key, model, system, user) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json",
+               "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model, max_tokens: 3000, system, messages: [{ role: "user", content: user }] })
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+  return (d.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+}
+async function callGPT(key, model, system, user) {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: user }] })
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+  return d.choices?.[0]?.message?.content || "";
+}
+async function callGemini(key, model, system, user) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "content-type": "application/json" },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: user }] }] })
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+  return (d.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+}
+const CALL = { claude: callClaude, gpt: callGPT, gemini: callGemini };
+
+async function ask(id, system, user, demoKey) {
+  if ($("#demo").checked) {
+    await new Promise(r => setTimeout(r, 700 + Math.random() * 1300));
+    return DEMO[demoKey][id] ?? DEMO[demoKey];
+  }
+  const t = await CALL[id](keyOf(id), $("#model-" + id).value.trim(), system, user);
+  if (!t.trim()) throw new Error("Empty reply.");
+  return t;
+}
+function friendly(e) {
+  const m = e?.message || String(e);
+  return m === "Failed to fetch" ? "Couldn't reach the API. Check your connection, and open the page from a normal browser tab." : m;
+}
+
+// ===================== text helpers =====================
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+// Markdown with math. Equations are pulled out before markdown runs (markdown
+// would mangle the underscores and backslashes), then drawn with KaTeX.
+function md(text) {
+  const code = [], math = [];
+  let t = String(text).replace(/```[\s\S]*?```|`[^`\n]+`/g, m => { code.push(m); return `@@CODE${code.length - 1}@@`; });
+  const stash = (tex, display) => { math.push({ tex, display }); return `@@MATH${math.length - 1}@@`; };
+  t = t
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, x) => stash(x, true))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, x) => stash(x, true))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, x) => stash(x, false))
+    .replace(/(^|[^\\$\w])\$(?![\s\d])([^$\n]+?)(?<!\s)\$(?!\d)/g, (_, p, x) => p + stash(x, false))
+    .replace(/(^|[^\\$\w])\$(?!\s)(\d[^$\n]*?[\\^_=+\-*/{}][^$\n]*?)(?<!\s)\$(?!\d)/g, (_, p, x) => p + stash(x, false));
+  t = t.replace(/@@CODE(\d+)@@/g, (_, i) => code[i]);
+  const html = (window.marked && window.DOMPurify)
+    ? DOMPurify.sanitize(marked.parse(t))
+    : "<p>" + esc(t).replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
+  return html.replace(/@@MATH(\d+)@@/g, (_, i) => {
+    const { tex, display } = math[i];
+    if (window.katex) {
+      try { return katex.renderToString(tex, { displayMode: display, throwOnError: false, output: "htmlAndMathml" }); } catch {}
+    }
+    return `<code>${esc(display ? "$$" + tex + "$$" : "$" + tex + "$")}</code>`;
+  });
+}
+function sections(text) {
+  const out = {}; let cur = null;
+  const names = "best answer|contradictions?|where they agree|agreement level|agreement|confidence";
+  const hashHead = new RegExp(`^\\s*#{1,4}\\s*\\**\\s*(${names})\\b`, "i");
+  const bareHead = new RegExp(`^\\s*\\**\\s*(${names})\\s*\\**\\s*:?\\s*\\**\\s*$`, "i");
+  for (const line of String(text).split("\n")) {
+    const h = line.match(hashHead) || line.match(bareHead);
+    if (h) {
+      cur = h[1].toLowerCase().replace(/^contradiction$/, "contradictions").replace(/^agreement$/, "agreement level");
+      out[cur] = ""; continue;
+    }
+    if (cur) out[cur] += line + "\n";
+  }
+  if (!out["best answer"]) out["best answer"] = text;
+  return out;
+}
+
+// ===================== clipboard + app links =====================
+function copyText(text, btn) {
+  const flash = (label) => { if (!btn) return; const o = btn.dataset.label || btn.textContent; btn.dataset.label = o; btn.textContent = label; setTimeout(() => btn.textContent = o, 1600); };
+  const fallback = () => {
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch {}
+    ta.remove(); flash(ok ? "Copied ✓" : "Copy failed");
+  };
+  try { navigator.clipboard.writeText(text).then(() => flash("Copied ✓"), fallback); } catch { fallback(); }
+}
+async function pasteInto(textarea, msgEl) {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t.trim()) { msgEl.textContent = "Your clipboard is empty. Copy the reply in the app first."; return; }
+    textarea.value = t; msgEl.textContent = "";
+  } catch {
+    textarea.focus();
+    msgEl.textContent = "Your browser blocked clipboard reading. Click in the box and press Ctrl+V (Cmd+V on a Mac).";
+  }
+}
+// Link that opens the app with the text pre-filled. Very long text won't fit in a
+// link, so then it opens the app empty and relies on the copy that happens on click.
+function appURL(id, text) {
+  const e = encodeURIComponent(text);
+  return e.length < 6000 ? APPS[id].q + e : APPS[id].base;
+}
+
+// Paste box used for answers, reviews and the manual combine step.
+function pasteUI({ steps, apps, request, who }) {
+  const fits = encodeURIComponent(request).length < 6000;
+  return `<div class="paste">
+    <p class="steps">${steps}</p>
+    <div class="row" style="gap:8px">
+      ${apps.map(id => `<a class="btn small" data-act="open" href="${esc(appURL(id, request))}" target="_blank" rel="noopener">${apps.length > 1 ? "" : "1 · "}Open ${nameOf(id)} ↗</a>`).join("")}
+      <button class="btn small ghost" type="button" data-act="copy">Copy text</button>
+    </div>
+    <p class="steps" style="color:var(--muted)">${fits ? "The app opens with the text filled in; just press send. If the box is empty, paste (it's already copied)." : "This one is too long to pre-fill, so it's copied when you click Open. Paste it into the app and press send."}</p>
+    <textarea placeholder="${apps.length > 1 ? "" : "2 · "}Paste ${esc(who)} reply here"></textarea>
+    <div class="row" style="gap:8px">
+      <button class="btn small ghost" type="button" data-act="paste">Paste from clipboard</button>
+      <button class="btn small" type="button" data-act="use">Use this</button>
+      <button class="btn small ghost" type="button" data-act="skip">Skip</button>
+      <span class="msg" data-role="msg"></span>
+    </div></div>`;
+}
+function wirePasteUI(root, request, done) {
+  const box = root.querySelector(".paste");
+  const ta = box.querySelector("textarea"), msg = box.querySelector('[data-role="msg"]');
+  box.querySelectorAll('[data-act="open"]').forEach(a => a.addEventListener("click", () => copyText(request)));
+  box.querySelector('[data-act="copy"]').addEventListener("click", e => copyText(request, e.currentTarget));
+  box.querySelector('[data-act="paste"]').addEventListener("click", () => pasteInto(ta, msg));
+  box.querySelector('[data-act="use"]').addEventListener("click", () => {
+    const t = ta.value.trim();
+    if (!t) { msg.textContent = "Paste the reply first."; return; }
+    done(t);
+  });
+  box.querySelector('[data-act="skip"]').addEventListener("click", () => done(null));
+}
+
+// ===================== board + dossiers =====================
+const KANJI = {
+  idle: ["待機", "Standby"], working: ["審議中", "Working"], waiting: ["入力待", "Waiting for you"],
+  done: ["回答", "Answered"], error: ["棄権", "Abstained"]
+};
+function unitState(s) {
+  if (!s) return "idle";
+  if (s.paste) return "waiting";
+  if (s.working) return "working";
+  if (s.error) return "error";
+  if (s.answer) return "done";
+  return "idle";
+}
+function setUnit(id, s) {
+  const el = $("#u-" + id), st = unitState(s);
+  el.dataset.s = st;
+  el.querySelector(".kanji").textContent = KANJI[st][0];
+  el.querySelector(".sub").textContent = st === "working" ? s.working : st === "error" ? (s.error === "Skipped." ? "Skipped" : "Error") : KANJI[st][1];
+}
+let state = {};
+const waiters = {};
+function waitFor(id) { return new Promise(res => { waiters[id] = (v) => { delete waiters[id]; res(v); }; }); }
+
+function cardHTML(m, s) {
+  const st = unitState(s);
+  const meta = s.error ? "Error" : s.paste ? "Waiting for you" : s.working ? s.working : s.answer ? (s.pasted ? "Pasted" : s.ms ? (s.ms / 1000).toFixed(1) + "s" : "Answered") : "Standby";
+  let body = "";
+  if (s.answer) body += `<div class="md">${md(s.answer)}</div>`;
+  if (s.paste) {
+    const review = s.paste.kind === "review";
+    body += pasteUI({
+      steps: review ? `<b>Cross-check:</b> have ${m.name} review all three answers, then paste its review.`
+                    : `Get this answer from the free <b>${m.name}</b> app.`,
+      apps: [m.id], request: s.paste.request, who: `${m.name}'s`
+    });
+  }
+  if (s.error) body += `<p class="err">${esc(s.error)}</p>`;
+  if (s.critique) body += `<details><summary>${m.name}'s review of the others</summary><div class="md">${md(s.critique)}</div></details>`;
+  else if (s.critiqueError) body += `<p class="err">Review failed: ${esc(s.critiqueError)}</p>`;
+  if (!body) body = `<p class="empty">Its answer appears here.</p>`;
+  return `<article class="card s-${st}" id="card-${m.id}"><div class="card-head"><h3>${m.unit}</h3><span class="who">${m.name} · ${esc(meta)}</span></div>${body}</article>`;
+}
+function drawCard(id) {
+  const m = MODELS.find(x => x.id === id), s = state[id] || {};
+  const html = cardHTML(m, s);
+  const el = document.getElementById("card-" + id);
+  if (el) el.outerHTML = html; else $("#dossiers").insertAdjacentHTML("beforeend", html);
+  if (s.paste) wirePasteUI(document.getElementById("card-" + id), s.paste.request, v => waiters[id]?.(v));
+  setUnit(id, s);
+}
+function drawAll() { $("#dossiers").innerHTML = ""; MODELS.forEach(m => drawCard(m.id)); }
+
+// ===================== resolution =====================
+const AGREE = {
+  1: ["一致", "STRONG AGREEMENT", "Strong agreement"],
+  2: ["部分一致", "SOME DISAGREEMENT", "Some disagreement"],
+  3: ["不一致", "MAJOR DISAGREEMENT", "Major disagreement"]
+};
+function setCore(a, jp, en) { const c = $("#core"); c.dataset.a = a || ""; c.querySelector(".result").textContent = jp; c.querySelector(".en").textContent = en; }
+let lastRun = null;
+
+function drawVerdict(text, by, example) {
+  const s = sections(text);
+  $("#best").innerHTML = md(s["best answer"].trim());
+  $("#contra").innerHTML = md((s.contradictions || "None found.").trim());
+  $("#agree").innerHTML = md((s["where they agree"] || "Not reported.").trim());
+  const al = (s["agreement level"] || "").toLowerCase();
+  const a = /major/.test(al) ? 3 : /some|partial|minor/.test(al) ? 2 : /strong|full|complete/.test(al) ? 1 : 0;
+  const meter = $("#meter");
+  if (a) { meter.hidden = false; meter.dataset.a = a; meter.querySelector("b").textContent = AGREE[a][2]; setCore(a, AGREE[a][0], AGREE[a][1]); }
+  else { meter.hidden = true; setCore("", "決議", "RESOLVED"); }
+  const c = (s.confidence || "").trim(), lv = (c.match(/\b(high|medium|low)\b/i) || [])[1];
+  const conf = $("#conf");
+  if (lv) { conf.hidden = false; conf.className = "tag c-" + lv.toLowerCase(); conf.textContent = lv + " confidence"; conf.title = c; }
+  else conf.hidden = true;
+  $("#by").hidden = !by; $("#by").textContent = by ? "Combined by " + by : "";
+  $("#exampleTag").hidden = !example;
+  $("#actions").hidden = false;
+}
+function resetVerdict(msg) {
+  $("#best").innerHTML = `<p class="empty">${esc(msg)}</p>`;
+  $("#contra").innerHTML = `<p class="empty">None yet.</p>`;
+  $("#agree").innerHTML = `<p class="empty">None yet.</p>`;
+  ["#meter", "#conf", "#by", "#exampleTag", "#actions"].forEach(s => $(s).hidden = true);
+  setCore("", "審議中", "DELIBERATING");
+}
+function setStatus(t) { $("#status").innerHTML = "STATUS: <b>" + esc(t) + "</b>"; }
+
+function manualCombine(request) {
+  $("#best").innerHTML = pasteUI({
+    steps: `<b>Last step:</b> open any of the free apps (a fresh chat works best), send the combine request, then paste its whole reply here.`,
+    apps: ["claude", "gpt", "gemini"], request, who: "the"
+  });
+  return new Promise(res => wirePasteUI($("#best"), request, res));
+}
+
+// ===================== follow-ups =====================
+let follow = null; // { q, best }
+function setFollow(f) {
+  follow = f;
+  $("#followChip").hidden = !f;
+  $("#followText").textContent = f ? f.q : "";
+}
+function withContext(q, f) {
+  if (!f) return q;
+  return `This is a follow-up question.\n\nEarlier question: ${f.q}\n\nThe answer we settled on:\n${f.best}\n\nFollow-up question: ${q}`;
+}
+
+// ===================== history =====================
+const HKEY = "magi.history";
+function loadHist() { try { return JSON.parse(store.get(HKEY) || "[]"); } catch { return []; } }
+function saveHist(h) {
+  let list = h.slice(0, 40);
+  while (list.length) { try { localStorage.setItem(HKEY, JSON.stringify(list)); break; } catch { list = list.slice(0, -1); } }
+}
+function recordRun(run) { const h = loadHist().filter(x => x.id !== run.id); h.unshift(run); saveHist(h); renderHist(); }
+function renderHist() {
+  const h = loadHist();
+  $("#histCount").textContent = h.length ? `(${h.length})` : "";
+  $("#histList").innerHTML = h.length ? h.map(r => {
+    const a = sections(r.verdict || "")["agreement level"] || "";
+    const when = new Date(r.time).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return `<div class="hist-item"><button class="open" type="button" data-id="${r.id}">
+      <span class="hq">${r.follow ? "↳ " : ""}${esc(r.q)}</span>
+      <span class="hm">${esc(when)}${a.trim() ? " · " + esc(a.trim().split("\n")[0]) : ""}</span></button>
+      <button class="del" type="button" data-del="${r.id}" aria-label="Delete">✕</button></div>`;
+  }).join("") : `<p class="empty">No saved queries yet. Each finished query is saved here automatically.</p>`;
+}
+function showRun(r) {
+  $("#q").value = r.q;
+  setFollow(null);
+  state = JSON.parse(JSON.stringify(r.answers || {}));
+  drawAll();
+  if (r.verdict) drawVerdict(r.verdict, r.by, false); else resetVerdict("This query wasn't combined.");
+  lastRun = r;
+  setStatus("ARCHIVE");
+  $("#hint").textContent = r.follow ? `Follow-up to: ${r.follow.q}` : "";
+}
+function openDrawer(open) { $("#drawer").hidden = !open; $("#scrim").hidden = !open; if (open) { renderHist(); $("#histClose").focus(); } }
+$("#histOpen").addEventListener("click", () => openDrawer(true));
+$("#histClose").addEventListener("click", () => openDrawer(false));
+$("#scrim").addEventListener("click", () => openDrawer(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#drawer").hidden) openDrawer(false); });
+$("#histList").addEventListener("click", e => {
+  const del = e.target.closest("[data-del]"), open = e.target.closest("[data-id]");
+  if (del) { saveHist(loadHist().filter(r => r.id !== del.dataset.del)); renderHist(); return; }
+  if (open) { const r = loadHist().find(x => x.id === open.dataset.id); if (r) { showRun(r); openDrawer(false); window.scrollTo({ top: 0, behavior: "smooth" }); } }
+});
+$("#histClear").addEventListener("click", e => {
+  const b = e.currentTarget;
+  if (b.dataset.armed) { store.del(HKEY); renderHist(); delete b.dataset.armed; b.textContent = "Clear all history"; $("#histMsg").textContent = "History cleared."; return; }
+  b.dataset.armed = "1"; b.textContent = "Click again to clear";
+  setTimeout(() => { delete b.dataset.armed; b.textContent = "Clear all history"; }, 4000);
+});
+
+// ===================== actions on the answer =====================
+$("#followBtn").addEventListener("click", () => {
+  if (!lastRun?.verdict) return;
+  setFollow({ q: lastRun.q, best: sections(lastRun.verdict)["best answer"].trim() });
+  $("#q").value = ""; $("#q").focus();
+  $("#q").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+$("#followCancel").addEventListener("click", () => setFollow(null));
+$("#copyBtn").addEventListener("click", e => {
+  if (!lastRun?.verdict) return;
+  copyText(sections(lastRun.verdict)["best answer"].trim(), e.currentTarget);
+});
+$("#saveBtn").addEventListener("click", () => {
+  if (!lastRun?.verdict) return;
+  const r = lastRun;
+  let out = `# ${r.q}\n\n_${new Date(r.time).toLocaleString()}_\n\n`;
+  if (r.follow) out += `> Follow-up to: ${r.follow.q}\n\n`;
+  out += r.verdict.trim() + "\n\n---\n\n# Individual answers\n";
+  MODELS.forEach(m => { const a = r.answers?.[m.id]; if (a?.answer) out += `\n## ${m.name}\n\n${a.answer}\n`; });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([out], { type: "text/markdown" }));
+  a.download = "magi-" + r.q.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/-$/, "") + ".md";
+  document.body.appendChild(a); a.click(); a.remove();
+  $("#actionMsg").textContent = "Saved. If nothing downloaded, use Copy answer instead.";
+});
+
+// ===================== the run =====================
+function pastePrompt(q) { return `${q}\n\n(Give your best, accurate and complete answer. Be specific, and say where you're unsure.)`; }
+
+$("#go").addEventListener("click", async () => {
+  const q = $("#q").value.trim();
+  if (!q) { $("#hint").textContent = "Type a question first."; return; }
+  const demo = $("#demo").checked;
+  const f = follow;
+  const fullQ = withContext(q, f);
+  const auto = (id) => demo || (modeOf(id) === "api" && keyOf(id));
+  const run = { id: Date.now().toString(36), time: Date.now(), q, follow: f ? { q: f.q, best: f.best } : null, answers: null, verdict: null, by: "" };
+
+  $("#go").disabled = true;
+  setFollow(null);
+  state = {};
+  MODELS.forEach(m => {
+    if (!demo && modeOf(m.id) === "paste") state[m.id] = { paste: { kind: "answer", request: pastePrompt(fullQ) } };
+    else if (!auto(m.id)) state[m.id] = { error: "No API key set. Add one in Unit configuration at the bottom, or switch this AI to Paste from free app." };
+    else state[m.id] = { working: "Answering" };
+  });
+  drawAll(); resetVerdict("Waiting for the three answers…");
+  const pasting = MODELS.filter(m => state[m.id].paste);
+  $("#hint").textContent = demo ? "Demo mode is on: this shows the built-in example for any question."
+    : pasting.length ? "Open each app below, send the question, then paste each reply back." : "";
+  if (pasting.length) document.getElementById("card-" + pasting[0].id).scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // 1 · independent answers
+  setStatus("PHASE 1 · ANSWERING");
+  await Promise.all(MODELS.filter(m => !state[m.id].error).map(async m => {
+    if (state[m.id].paste) {
+      const text = await waitFor(m.id);
+      state[m.id] = text ? { answer: text, pasted: true } : { error: "Skipped." };
+      return drawCard(m.id);
+    }
+    const t0 = performance.now();
+    try { state[m.id] = { answer: await ask(m.id, ANSWER_SYS, fullQ, "answers"), ms: performance.now() - t0 }; }
+    catch (e) { state[m.id] = { error: friendly(e) }; }
+    drawCard(m.id);
+  }));
+  $("#hint").textContent = "";
+  const ok = MODELS.filter(m => state[m.id].answer);
+  const finish = () => {
+    run.answers = JSON.parse(JSON.stringify(state));
+    MODELS.forEach(m => { const a = run.answers[m.id]; if (a) { delete a.paste; delete a.working; } });
+    lastRun = run; recordRun(run);
+    setStatus("RESOLVED"); $("#go").disabled = false;
+  };
+  if (!ok.length) { resetVerdict("No unit answered. Check each dossier below."); setCore("", "棄権", "NO ANSWERS"); return finish(); }
+
+  const block = ok.map(m => `### ${m.name}'s answer\n${state[m.id].answer}`).join("\n\n");
+
+  // 2 · cross-check
+  const reviewers = ok.filter(m => ($("#crosscheck").checked && auto(m.id)) || ($("#manualcheck").checked && !auto(m.id)));
+  if (ok.length >= 2 && reviewers.length) {
+    setStatus("PHASE 2 · CROSS-CHECK");
+    await Promise.all(reviewers.map(async m => {
+      const prompt = `QUESTION:\n${fullQ}\n\nYou are ${m.name}.\n\n${block}`;
+      if (auto(m.id)) {
+        state[m.id].working = "Reviewing"; drawCard(m.id);
+        try { state[m.id].critique = await ask(m.id, CRITIQUE_SYS, prompt, "critiques"); }
+        catch (e) { state[m.id].critiqueError = friendly(e); }
+        delete state[m.id].working;
+      } else {
+        state[m.id].paste = { kind: "review", request: CRITIQUE_SYS + "\n\n" + prompt };
+        drawCard(m.id);
+        const t = await waitFor(m.id);
+        delete state[m.id].paste;
+        if (t) state[m.id].critique = t;
+      }
+      drawCard(m.id);
+    }));
+  }
+
+  // 3 · combine
+  setStatus("PHASE 3 · COMBINING");
+  resetVerdict("Combining answers and resolving contradictions…");
+  const reviews = ok.filter(m => state[m.id].critique).map(m => `### ${m.name}'s review\n${state[m.id].critique}`).join("\n\n");
+  const prompt = `QUESTION:\n${fullQ}\n\n${block}${reviews ? "\n\n## Cross-check reviews\n" + reviews : ""}`;
+  const order = [$("#judge").value, ...MODELS.map(m => m.id)].filter((v, i, a) => a.indexOf(v) === i).filter(auto);
+
+  if (ok.length === 1) {
+    run.verdict = `## Best answer\n${state[ok[0].id].answer}\n## Contradictions\nOnly one AI answered, so nothing to compare.\n## Confidence\nLow. Only one answer.`;
+    run.by = ok[0].name + " (only answer)";
+  } else if (order.length) {
+    for (const id of order) {
+      try { run.verdict = await ask(id, SYNTH_SYS, prompt, "synthesis"); run.by = nameOf(id); break; }
+      catch (e) { $("#hint").textContent = `${nameOf(id)} couldn't combine (${friendly(e)}).`; }
+    }
+  } else {
+    $("#report").scrollIntoView({ behavior: "smooth", block: "start" });
+    const t = await manualCombine(SYNTH_SYS + "\n\n" + prompt);
+    if (t) { run.verdict = t; run.by = "free app (pasted)"; }
+  }
+  if (run.verdict) drawVerdict(run.verdict, run.by, demo);
+  else { resetVerdict("Combining was skipped or failed. The individual answers are below."); setCore("", "保留", "NOT COMBINED"); }
+  finish();
+});
+
+// ===================== settings =====================
+function syncModeUI() {
+  MODELS.forEach(m => { const api = modeOf(m.id) === "api"; $("#key-" + m.id).disabled = !api; $("#model-" + m.id).disabled = !api; });
+}
+function saveKeys() {
+  if (MODELS.some(m => keyOf(m.id))) $("#demo").checked = false;
+  if (!$("#remember").checked) return;
+  store.set("magi.remember", "1");
+  MODELS.forEach(m => store.set("magi.key." + m.id, keyOf(m.id)));
+}
+$("#remember").addEventListener("change", e => {
+  if (e.target.checked) saveKeys();
+  else { store.del("magi.remember"); MODELS.forEach(m => store.del("magi.key." + m.id)); }
+});
+$("#forget").addEventListener("click", () => {
+  store.del("magi.remember"); MODELS.forEach(m => { store.del("magi.key." + m.id); $("#key-" + m.id).value = ""; });
+  $("#remember").checked = false; $("#hint").textContent = "Saved keys cleared.";
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  const remember = store.get("magi.remember") === "1";
+  $("#remember").checked = remember;
+  MODELS.forEach(m => {
+    if (remember) $("#key-" + m.id).value = store.get("magi.key." + m.id) || "";
+    const model = store.get("magi.model." + m.id); if (model) $("#model-" + m.id).value = model;
+    const mode = store.get("magi.mode." + m.id); if (mode) $("#mode-" + m.id).value = mode;
+    $("#key-" + m.id).addEventListener("input", saveKeys);
+    $("#model-" + m.id).addEventListener("input", e => store.set("magi.model." + m.id, e.target.value));
+    $("#mode-" + m.id).addEventListener("change", e => { store.set("magi.mode." + m.id, e.target.value); syncModeUI(); });
+  });
+  syncModeUI();
+  const j = store.get("magi.judge"); if (j) $("#judge").value = j;
+  $("#judge").addEventListener("change", e => store.set("magi.judge", e.target.value));
+  const mc = store.get("magi.manualcheck"); if (mc) $("#manualcheck").checked = mc === "1";
+  $("#manualcheck").addEventListener("change", e => store.set("magi.manualcheck", e.target.checked ? "1" : "0"));
+  renderHist();
+
+  // First view: a worked example so the page shows what it does.
+  state = {}; MODELS.forEach(m => state[m.id] = { answer: DEMO.answers[m.id], critique: DEMO.critiques[m.id] });
+  drawAll();
+  drawVerdict(DEMO.synthesis, "Claude", true);
+  $("#actions").hidden = true;
+});
+</script>
+<script>
+// Example content used by Demo mode and the first view.
+var DEMO = {
+  answers: {
+    claude: `Rest a steak for **5–10 minutes**, roughly 5 minutes per inch of thickness.
+
+- **Why:** the juices redistribute and carryover heat finishes cooking the center. Expect the internal temperature to rise about 3–5°F while it rests.
+- **Covering:** tent it *loosely* with foil if your kitchen is cold. Don't wrap it tightly, or the trapped steam softens the crust.
+- **Tip:** pull it off the heat a few degrees below your target doneness to allow for carryover.`,
+    gpt: `A good rule is to rest the steak for **about half of its total cooking time**. If it cooked for 12 minutes, rest it for around 6.
+
+1. Move it to a cutting board or a warm plate.
+2. **Wrap it tightly in foil** to keep the heat in.
+3. Slice against the grain after resting.
+
+Resting lets the juices settle so less runs out when you cut.`,
+    gemini: `Resting helps, but less than people think. For a typical 1–1.5 inch steak, **3–5 minutes** captures most of the benefit; longer mainly lets it go cold.
+
+- Skip covering for thin steaks; a loose foil tent is fine for thick cuts.
+- If you used the **reverse sear** method (low oven first, sear last), the steak needs little or no rest.
+- Carryover cooking is real, so take it off 3–5°F early.`
+  },
+  critiques: {
+    claude: `- **Contradiction on foil:** ChatGPT says wrap tightly; Gemini and I say loosely or not at all. Tight wrapping steams the crust, so loosely is correct.
+- **Rest time:** ChatGPT's "half the cooking time" and my "5 min per inch" land in a similar range for normal steaks. Gemini's 3–5 minutes is a fair minimum.
+- My answer missed the reverse-sear exception that Gemini raised.`,
+    gpt: `- I was wrong to recommend wrapping tightly; it softens the sear. A loose tent is better.
+- All three agree resting reduces juice loss and that carryover cooking happens.
+- Claude's per-inch rule is easier to apply than my half-the-cooking-time rule for thick cuts.`,
+    gemini: `- ChatGPT's tight foil wrap is a mistake for crust quality.
+- Claude's upper bound of 10 minutes is fine for very thick steaks but more than a normal steak needs.
+- None of us mentioned that resting on a wire rack keeps the bottom from getting soggy.`
+  },
+  synthesis: `## Best answer
+Rest the steak for **about 5 minutes** for a typical 1–1.5 inch cut, and up to **10 minutes** for very thick steaks (around 5 minutes per inch is a handy rule).
+
+- **Cover it loosely, never tightly.** A loose foil tent keeps some heat in; a tight wrap traps steam and softens the crust. For thin steaks, you can skip the foil.
+- **Plan for carryover.** The center rises roughly 3–5°F while resting, so take it off the heat a few degrees before your target.
+- **Rest it on a rack** if you have one, so the bottom doesn't sit in juice and go soggy.
+- **Reverse-seared steaks** need little or no rest, since they were cooked gently first.
+
+## Contradictions
+- **Foil:** ChatGPT said to wrap tightly; Claude and Gemini said loosely or not at all. **Loosely is correct**, because tight wrapping steams the crust. ChatGPT agreed in its review.
+- **Rest time:** Claude said 5–10 minutes, ChatGPT said half the cooking time, Gemini said 3–5 minutes. These mostly overlap for normal steaks. 5 minutes covers most cases; thicker cuts warrant longer.
+
+## Where they agree
+- Resting reduces juice loss when slicing.
+- Carryover cooking raises the internal temperature a few degrees.
+- Pull the steak slightly before your target doneness.
+
+## Agreement level
+Some disagreement
+
+## Confidence
+High. All three agreed on the core advice, and the one real disagreement (tight foil) was resolved with a clear reason.`
+};
+</script>
+</body>
+</html>
